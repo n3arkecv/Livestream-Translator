@@ -1,17 +1,22 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsDropShadowEffect
-from PySide6.QtCore import Qt, QPoint
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtCore import Qt, QPoint, QRect
+from PySide6.QtGui import QFont, QColor, QCursor
 
 class OverlayWindow(QWidget):
+    MARGIN = 10  # Resize boundary width
+
     def __init__(self):
         super().__init__()
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint | 
             Qt.WindowType.WindowStaysOnTopHint | 
-            Qt.WindowType.Tool # Tool window style, usually no taskbar icon
+            Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False) # Default false, can click
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        
+        # Enable mouse tracking for cursor updates
+        self.setMouseTracking(True)
 
         # Layout
         self.layout = QVBoxLayout(self)
@@ -66,10 +71,12 @@ class OverlayWindow(QWidget):
         
         # Background handling
         self.show_background = True
-        self.bg_color = QColor(0, 0, 0, 100) # Semi-transparent black
+        self.bg_color = QColor(0, 0, 0, 100)
 
-        # Dragging state
+        # State for dragging/resizing
         self.old_pos = None
+        self.resizing = False
+        self.resize_edge = None # (horizontal, vertical) e.g. ('left', 'top')
 
     def update_font(self):
         font_ongoing = QFont("Segoe UI", self.font_size)
@@ -91,6 +98,10 @@ class OverlayWindow(QWidget):
     def update_partial(self, text):
         self.lbl_ongoing.setText(text)
 
+    def on_final_sentence(self, text):
+        self.lbl_translated.setText(text)
+        self.lbl_ongoing.setText("") 
+
     def update_translation(self, text):
         self.lbl_translated.setText(text)
         
@@ -108,17 +119,74 @@ class OverlayWindow(QWidget):
             painter.drawRoundedRect(self.rect(), 15, 15)
         super().paintEvent(event)
 
-    # Dragging implementation
+    # Dragging and Resizing implementation
+    def _check_resize_area(self, pos):
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        m = self.MARGIN
+        
+        h_edge = None
+        v_edge = None
+        
+        if x < m: h_edge = 'left'
+        elif x > w - m: h_edge = 'right'
+        
+        if y < m: v_edge = 'top'
+        elif y > h - m: v_edge = 'bottom'
+        
+        return h_edge, v_edge
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.old_pos = event.globalPosition().toPoint()
+            h, v = self._check_resize_area(event.position().toPoint())
+            if h or v:
+                self.resizing = True
+                self.resize_edge = (h, v)
+                self.old_pos = event.globalPosition().toPoint()
+            else:
+                self.resizing = False
+                self.old_pos = event.globalPosition().toPoint()
 
     def mouseMoveEvent(self, event):
-        if self.old_pos:
+        pos = event.position().toPoint()
+        
+        if not self.resizing and not self.old_pos:
+            # Update cursor shape
+            h, v = self._check_resize_area(pos)
+            if h == 'left' and v == 'top': self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+            elif h == 'right' and v == 'bottom': self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+            elif h == 'left' and v == 'bottom': self.setCursor(Qt.CursorShape.SizeBDiagCursor)
+            elif h == 'right' and v == 'top': self.setCursor(Qt.CursorShape.SizeBDiagCursor)
+            elif h: self.setCursor(Qt.CursorShape.SizeHorCursor)
+            elif v: self.setCursor(Qt.CursorShape.SizeVerCursor)
+            else: self.setCursor(Qt.CursorShape.ArrowCursor)
+
+        if self.resizing and self.old_pos:
+            delta = event.globalPosition().toPoint() - self.old_pos
+            geom = self.geometry()
+            h, v = self.resize_edge
+            
+            if h == 'right':
+                geom.setWidth(geom.width() + delta.x())
+            elif h == 'left':
+                geom.setLeft(geom.left() + delta.x())
+                
+            if v == 'bottom':
+                geom.setHeight(geom.height() + delta.y())
+            elif v == 'top':
+                geom.setTop(geom.top() + delta.y())
+                
+            self.setGeometry(geom)
+            self.old_pos = event.globalPosition().toPoint()
+            
+        elif self.old_pos: # Dragging
             delta = event.globalPosition().toPoint() - self.old_pos
             self.move(self.pos() + delta)
             self.old_pos = event.globalPosition().toPoint()
 
     def mouseReleaseEvent(self, event):
         self.old_pos = None
+        self.resizing = False
+        self.resize_edge = None
+        self.setCursor(Qt.CursorShape.ArrowCursor)
 

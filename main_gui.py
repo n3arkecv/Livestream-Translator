@@ -59,6 +59,10 @@ class BackendWorker(QThread):
     def stop_services(self):
         if self.loop:
             self.loop.call_soon_threadsafe(self._stop_services_async)
+
+    def set_language(self, lang_code):
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: self.stt_manager.set_language(lang_code))
     
     def stop_thread(self):
         if self.loop:
@@ -92,7 +96,7 @@ def main():
             "use_loopback": True
         },
         "chunk": {
-            "size_ms": 3000,
+            "size_ms": 500,
             "overlap_ms": 0
         },
         "stt": {
@@ -114,6 +118,7 @@ def main():
     # Connect Window signals to Backend
     window.sig_start.connect(worker.start_services)
     window.sig_stop.connect(worker.stop_services)
+    window.sig_update_language.connect(worker.set_language)
     
     window.show()
 

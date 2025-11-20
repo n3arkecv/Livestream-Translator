@@ -10,8 +10,14 @@ class LocalSTTEngine(STTEngine):
         self.device = device
         self.compute_type = compute_type
         self.model = None
+        self.target_language = None
         
         self._load_model()
+
+    def set_language(self, lang_code):
+        """Sets the target language for transcription (e.g. 'en', 'ja', 'zh'). None for auto-detect."""
+        self.target_language = lang_code if lang_code != "auto" else None
+        self.logger.info(f"Target language set to: {self.target_language}")
 
     def _load_model(self):
         try:
@@ -72,7 +78,7 @@ class LocalSTTEngine(STTEngine):
                 lambda: list(self.model.transcribe(
                     audio_chunk, 
                     beam_size=5, 
-                    language=None, # Auto-detect language
+                    language=self.target_language, # Use configured language
                     condition_on_previous_text=False,
                     vad_filter=True, # Re-enable VAD
                     vad_parameters=dict(min_silence_duration_ms=500) # Default 500

@@ -5,6 +5,7 @@ class QtEventBridge(QObject):
     Bridges non-Qt events (EventBus) to Qt Signals for thread-safe UI updates.
     """
     sig_stt_partial = Signal(str)
+    sig_stt_final = Signal(str)
     sig_log = Signal(str, str) # level, message
 
     def __init__(self, bus):
@@ -13,6 +14,7 @@ class QtEventBridge(QObject):
         
         # Subscribe to EventBus events
         self.bus.subscribe("stt.partial", self._on_stt_partial)
+        self.bus.subscribe("stt.final_sentence", self._on_stt_final)
         
         # We should also subscribe to logs if SystemLogger emits events, 
         # but currently SystemLogger might just write to file/console. 
@@ -28,7 +30,11 @@ class QtEventBridge(QObject):
         if text:
             self.sig_stt_partial.emit(text)
 
+    def _on_stt_final(self, data):
+        text = data.get("sentence", "")
+        if text:
+            self.sig_stt_final.emit(text)
+
     def emit_log(self, level, message):
         """Can be called by a custom logging handler."""
         self.sig_log.emit(level, message)
-

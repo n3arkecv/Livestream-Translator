@@ -18,6 +18,13 @@ class STTManager:
         self.engine: STTEngine = None
         self.mode = config.get("stt", {}).get("mode", "local")
         
+        # Buffer for "Streaming" style accumulation
+        import numpy as np
+        self.audio_buffer = np.array([], dtype=np.float32)
+        self.silence_counter = 0
+        self.VAD_THRESHOLD = 0.005 # Adjust based on noise floor
+        self.SILENCE_CHUNKS_THRESHOLD = 2 # 2 * 500ms = 1 second silence triggers finalize
+        
         # Use thread-safe queue for audio data transfer (can be called from any thread)
         self.audio_queue = queue.Queue(maxsize=10)  # Thread-safe queue
         
@@ -28,6 +35,13 @@ class STTManager:
         
         # We need to start the processing loop explicitly
         self._processing_task = None
+
+    def set_language(self, lang_code):
+        """Sets the language on the engine if supported."""
+        if self.engine and hasattr(self.engine, 'set_language'):
+            self.engine.set_language(lang_code)
+        else:
+            self.logger.warning("Engine does not support language switching or not initialized")
 
     def _setup_engine(self):
         stt_config = self.config.get("stt", {})
@@ -106,38 +120,65 @@ class STTManager:
             return
 
         try:
-            self.bus.emit("stt.decode_started", {})
-            
             import numpy as np
-            
-            # CRITICAL DEBUG: Check chunk shape and type BEFORE any processing
-            # self.logger.debug(f"[STTManager] Chunk received: shape={chunk.shape}, dtype={chunk.dtype}, ndim={chunk.ndim}")
             
             # Ensure 1D array (mono)
             if chunk.ndim > 1:
-                # self.logger.warning(f"[STTManager] Chunk is {chunk.ndim}D, flattening to mono. Original shape: {chunk.shape}")
                 if chunk.ndim == 2:
-                    # If it's (samples, channels), mix to mono
                     chunk = chunk.mean(axis=1) if chunk.shape[1] > 1 else chunk[:, 0]
                 else:
                     chunk = chunk.flatten()
             
-            rms = np.sqrt(np.mean(chunk**2))
-            if rms < 0.01:
-                 # Skip silence
-                 return
-            
-            # Explicitly ensure float32 for local engine consistency
+            # Ensure float32
             if chunk.dtype != np.float32:
                 chunk = chunk.astype(np.float32)
+
+            # --- VAD & Buffering Logic ---
             
-            text = await self.engine.transcribe(chunk, 44100)
+            # 1. Check Energy of NEW chunk
+            rms = np.sqrt(np.mean(chunk**2))
+            if rms < self.VAD_THRESHOLD:
+                self.silence_counter += 1
+            else:
+                self.silence_counter = 0
+                
+            # 2. Append to Buffer
+            self.audio_buffer = np.concatenate((self.audio_buffer, chunk))
+            
+            # 3. Check buffer limits
+            buffer_duration_sec = len(self.audio_buffer) / 44100
+            
+            should_finalize = False
+            if self.silence_counter >= self.SILENCE_CHUNKS_THRESHOLD and buffer_duration_sec > 0.5:
+                should_finalize = True
+            elif buffer_duration_sec > 15.0: # Force finalize if too long
+                should_finalize = True
+                
+            # If buffer is very short and silent, skip processing to save GPU
+            if buffer_duration_sec < 0.2:
+                return
+
+            # 4. Transcribe Accumulated Buffer
+            self.bus.emit("stt.decode_started", {})
+            text = await self.engine.transcribe(self.audio_buffer, 44100)
             
             if text:
-                # self.logger.info(f"STT Result: {text}") # Log any result
-                self.bus.emit("stt.partial", {"text": text})
+                if should_finalize:
+                    # Finalize
+                    self.bus.emit("stt.final_sentence", {"sentence": text})
+                    self.audio_buffer = np.array([], dtype=np.float32)
+                    self.silence_counter = 0
+                else:
+                    # Partial
+                    self.bus.emit("stt.partial", {"text": text})
             else:
-                pass
+                # No text found
+                if should_finalize:
+                    # Just clear buffer if we thought we were finishing but got nothing (noise)
+                    self.audio_buffer = np.array([], dtype=np.float32)
+                    self.silence_counter = 0
                 
         except Exception as e:
             self.logger.error("STT processing failed", exc=e)
+            # Reset buffer on error to avoid stuck state
+            self.audio_buffer = np.array([], dtype=np.float32)
