@@ -102,7 +102,7 @@ def main():
             "use_loopback": True
         },
         "chunk": {
-            "size_ms": 500,
+            "size_ms": 150,
             "overlap_ms": 0
         },
         "stt": {

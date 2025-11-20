@@ -18,6 +18,9 @@ class LocalSTTEngine(STTEngine):
         """Sets the target language for transcription (e.g. 'en', 'ja', 'zh'). None for auto-detect."""
         self.target_language = lang_code if lang_code != "auto" else None
         self.logger.info(f"Target language set to: {self.target_language}")
+        
+    def is_auto_detect(self):
+        return self.target_language is None
 
     def reload_model(self, model_name):
         """Reloads the model with a new model name."""

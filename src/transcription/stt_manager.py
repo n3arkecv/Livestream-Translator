@@ -22,11 +22,14 @@ class STTManager:
         import numpy as np
         self.audio_buffer = np.array([], dtype=np.float32)
         self.silence_counter = 0
+        self.chunks_since_transcribe = 0
         self.VAD_THRESHOLD = 0.005 # Adjust based on noise floor
-        self.SILENCE_CHUNKS_THRESHOLD = 2 # 2 * 500ms = 1 second silence triggers finalize
+        self.SILENCE_CHUNKS_THRESHOLD = 2 # 2 * 150ms = 300ms silence triggers finalize
+        self.MAX_BUFFER_DURATION = 15.0 # Force finalize after 15 seconds
+        self.TRANSCRIBE_INTERVAL = 2 # Transcribe every 2 chunks (300ms) to save GPU
         
         # Use thread-safe queue for audio data transfer (can be called from any thread)
-        self.audio_queue = queue.Queue(maxsize=10)  # Thread-safe queue
+        self.audio_queue = queue.Queue(maxsize=15)  # Thread-safe queue
         
         self._setup_engine()
         
@@ -156,39 +159,51 @@ class STTManager:
                 
             # 2. Append to Buffer
             self.audio_buffer = np.concatenate((self.audio_buffer, chunk))
+            self.chunks_since_transcribe += 1
             
             # 3. Check buffer limits
             buffer_duration_sec = len(self.audio_buffer) / 44100
             
             should_finalize = False
-            if self.silence_counter >= self.SILENCE_CHUNKS_THRESHOLD and buffer_duration_sec > 0.5:
+            if self.silence_counter >= self.SILENCE_CHUNKS_THRESHOLD and buffer_duration_sec > 0.3:
                 should_finalize = True
-            elif buffer_duration_sec > 15.0: # Force finalize if too long
+            elif buffer_duration_sec > self.MAX_BUFFER_DURATION: # Force finalize if too long
                 should_finalize = True
                 
             # If buffer is very short and silent, skip processing to save GPU
-            if buffer_duration_sec < 0.2:
+            if buffer_duration_sec < 0.1:
                 return
 
             # 4. Transcribe Accumulated Buffer
-            self.bus.emit("stt.decode_started", {})
-            text = await self.engine.transcribe(self.audio_buffer, 44100)
-            
-            if text:
-                if should_finalize:
-                    # Finalize
-                    self.bus.emit("stt.final_sentence", {"sentence": text})
-                    self.audio_buffer = np.array([], dtype=np.float32)
-                    self.silence_counter = 0
+            # Optimize: Only transcribe if finalizing OR enough time passed (throttle)
+            # Dynamic throttle based on auto-detect mode
+            throttle_interval = self.TRANSCRIBE_INTERVAL
+            if hasattr(self.engine, 'is_auto_detect') and self.engine.is_auto_detect():
+                throttle_interval = self.TRANSCRIBE_INTERVAL + 1 # Slower updates for auto-detect
+                
+            if should_finalize or self.chunks_since_transcribe >= throttle_interval:
+                self.bus.emit("stt.decode_started", {})
+                text = await self.engine.transcribe(self.audio_buffer, 44100)
+                self.chunks_since_transcribe = 0 # Reset throttle counter
+                
+                if text:
+                    if should_finalize:
+                        # Finalize
+                        self.bus.emit("stt.final_sentence", {"sentence": text})
+                        self.audio_buffer = np.array([], dtype=np.float32)
+                        self.silence_counter = 0
+                    else:
+                        # Partial
+                        self.bus.emit("stt.partial", {"text": text})
                 else:
-                    # Partial
-                    self.bus.emit("stt.partial", {"text": text})
+                    # No text found
+                    if should_finalize:
+                        # Just clear buffer if we thought we were finishing but got nothing (noise)
+                        self.audio_buffer = np.array([], dtype=np.float32)
+                        self.silence_counter = 0
             else:
-                # No text found
-                if should_finalize:
-                    # Just clear buffer if we thought we were finishing but got nothing (noise)
-                    self.audio_buffer = np.array([], dtype=np.float32)
-                    self.silence_counter = 0
+                # Skip transcription for this chunk, just accumulate
+                pass
                 
         except Exception as e:
             self.logger.error("STT processing failed", exc=e)

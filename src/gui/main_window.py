@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit, QLabel, QGroupBox, QComboBox
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit, QLabel, QGroupBox, QComboBox, QSpinBox
 from PySide6.QtCore import Signal, Slot
 from .overlay_window import OverlayWindow
 
@@ -97,6 +97,16 @@ class MainWindow(QMainWindow):
         layout_overlay.addWidget(lbl_size)
         layout_overlay.addWidget(self.combo_size)
         
+        # History Lines Control
+        lbl_hist = QLabel("History Lines:")
+        self.spin_hist = QSpinBox()
+        self.spin_hist.setRange(0, 5)
+        self.spin_hist.setValue(3) # Default 3
+        self.spin_hist.valueChanged.connect(self.on_history_lines_changed)
+        
+        layout_overlay.addWidget(lbl_hist)
+        layout_overlay.addWidget(self.spin_hist)
+        
         grp_overlay.setLayout(layout_overlay)
         main_layout.addWidget(grp_overlay)
 
@@ -132,6 +142,9 @@ class MainWindow(QMainWindow):
         size = self.combo_size.currentData()
         if size:
             self.overlay.set_font_size(size)
+
+    def on_history_lines_changed(self, value):
+        self.overlay.set_history_lines(value)
 
     def on_start_clicked(self):
         self.btn_start.setEnabled(False)
