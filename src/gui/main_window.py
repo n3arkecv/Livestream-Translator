@@ -136,12 +136,14 @@ class MainWindow(QMainWindow):
     def on_start_clicked(self):
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
+        self.combo_model.setEnabled(False) # Disable model change during run
         self.append_log("INFO", "Starting services...")
         self.sig_start.emit()
 
     def on_stop_clicked(self):
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
+        self.combo_model.setEnabled(True) # Enable model change when stopped
         self.append_log("INFO", "Stopping services...")
         self.sig_stop.emit()
 
