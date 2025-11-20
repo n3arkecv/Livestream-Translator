@@ -43,6 +43,18 @@ class STTManager:
         else:
             self.logger.warning("Engine does not support language switching or not initialized")
 
+    def set_model(self, model_name):
+        """Reloads the model on the engine if supported."""
+        if self.engine and hasattr(self.engine, 'reload_model'):
+            # This might block, so ideally it should be called in a way that doesn't freeze the UI too long
+            # But since we are in BackendWorker thread (asyncio loop), we should be careful.
+            # Ideally, reload_model should be async or fast. 
+            # Loading a model takes time (seconds), so it WILL block the loop if not threaded.
+            # For simplicity now, we just call it.
+            self.engine.reload_model(model_name)
+        else:
+            self.logger.warning("Engine does not support model reloading")
+
     def _setup_engine(self):
         stt_config = self.config.get("stt", {})
         if self.mode == "api":

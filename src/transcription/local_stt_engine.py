@@ -19,6 +19,20 @@ class LocalSTTEngine(STTEngine):
         self.target_language = lang_code if lang_code != "auto" else None
         self.logger.info(f"Target language set to: {self.target_language}")
 
+    def reload_model(self, model_name):
+        """Reloads the model with a new model name."""
+        if model_name == self.model_name:
+            return
+        
+        self.logger.info(f"Reloading model to: {model_name}")
+        # Unload current model (if possible) to free VRAM
+        self.model = None
+        import gc
+        gc.collect()
+        
+        self.model_name = model_name
+        self._load_model()
+
     def _load_model(self):
         try:
             from faster_whisper import WhisperModel

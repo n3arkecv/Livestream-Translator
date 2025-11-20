@@ -7,12 +7,13 @@ class MainWindow(QMainWindow):
     sig_start = Signal()
     sig_stop = Signal()
     sig_update_language = Signal(str)
+    sig_update_model = Signal(str)
 
     def __init__(self, bridge):
         super().__init__()
         self.bridge = bridge
         self.setWindowTitle("Livestream Translator Control")
-        self.resize(400, 600)
+        self.resize(400, 650)
 
         # Central Widget
         central_widget = QWidget()
@@ -21,7 +22,22 @@ class MainWindow(QMainWindow):
 
         # Control Panel
         grp_control = QGroupBox("Control")
-        layout_control = QVBoxLayout() # Changed to VBox to accommodate language selector
+        layout_control = QVBoxLayout()
+        
+        # Model Selector
+        layout_model = QHBoxLayout()
+        lbl_model = QLabel("Model:")
+        self.combo_model = QComboBox()
+        # Using full repo paths for automatic download by faster-whisper
+        self.combo_model.addItem("Turbo v3 (High Accuracy)", "deepdml/faster-whisper-large-v3-turbo-ct2")
+        self.combo_model.addItem("Small (Balanced)", "small")
+        self.combo_model.addItem("Tiny (Fastest)", "tiny")
+        self.combo_model.addItem("Tiny English (Fastest EN)", "tiny.en")
+        self.combo_model.currentIndexChanged.connect(self.on_model_changed)
+        
+        layout_model.addWidget(lbl_model)
+        layout_model.addWidget(self.combo_model)
+        layout_control.addLayout(layout_model)
         
         # Language Selector
         layout_lang = QHBoxLayout()
@@ -106,6 +122,11 @@ class MainWindow(QMainWindow):
         lang_code = self.combo_lang.currentData()
         self.append_log("INFO", f"Language changed to: {lang_code}")
         self.sig_update_language.emit(lang_code)
+
+    def on_model_changed(self, index):
+        model_name = self.combo_model.currentData()
+        self.append_log("INFO", f"Switching model to: {model_name} (may take a few seconds)")
+        self.sig_update_model.emit(model_name)
 
     def on_font_size_changed(self, index):
         size = self.combo_size.currentData()

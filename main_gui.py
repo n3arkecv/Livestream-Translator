@@ -64,6 +64,12 @@ class BackendWorker(QThread):
         if self.loop:
             self.loop.call_soon_threadsafe(lambda: self.stt_manager.set_language(lang_code))
     
+    def set_model(self, model_name):
+        if self.loop:
+            # Model loading is heavy, maybe offload to executor? 
+            # For now, running it in loop might freeze audio processing for a few seconds, which is acceptable during config change.
+            self.loop.call_soon_threadsafe(lambda: self.stt_manager.set_model(model_name))
+
     def stop_thread(self):
         if self.loop:
             self.loop.call_soon_threadsafe(self.loop.stop)
@@ -119,6 +125,7 @@ def main():
     window.sig_start.connect(worker.start_services)
     window.sig_stop.connect(worker.stop_services)
     window.sig_update_language.connect(worker.set_language)
+    window.sig_update_model.connect(worker.set_model)
     
     window.show()
 
