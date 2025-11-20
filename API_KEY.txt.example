@@ -1,0 +1,22 @@
+# API Keys Configuration
+# 
+# 使用說明：
+# 1. 複製此文件為 API_KEY.txt（不會被 git 追蹤）
+# 2. 填入您的 API keys
+# 3. 使用 tools/load_api_keys.py 載入環境變數，或手動設定環境變數
+#
+# 格式：每行一個環境變數，格式為 KEY=VALUE
+# 註解以 # 開頭，空行會被忽略
+
+# OpenAI API Key (用於 LLM 翻譯和 GPT-4o Transcribe)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Google API Key (可選，用於 Gemini STT)
+GOOGLE_API_KEY=your_google_api_key_here
+
+# 其他環境變數（可選）
+# YTTRANS_AUDIO_DEVICE=default
+# YTTRANS_PROFILE=default
+
+
+

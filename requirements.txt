@@ -1,0 +1,33 @@
+# Core
+pydantic>=2.7
+numpy>=1.26
+pyaudiowpatch>=0.2.12.4  # WASAPI 支持的 PyAudio 分支（Windows 專用）
+tqdm>=4.66
+
+# Audio Processing - High Quality Resampling
+resampy>=0.4.2           # 高質量音頻重採樣（可選，用於提升音質）
+librosa>=0.10.0          # 音頻分析與處理（可選，提供更多音頻處理功能）
+
+# GUI
+PySide6>=6.7  # 或 PyQt6，請二選一並在程式碼保持介面一致
+# PyQt6>=6.7
+
+# STT (local)
+faster-whisper>=1.0
+# 若用 PyTorch CUDA 版，請先依文檔安裝對應 wheel
+
+# LLM / HTTP
+openai>=1.50.0
+httpx>=0.27
+
+# Logging / Metrics
+colorama>=0.4
+pandas>=2.2
+
+# JSON Schema 驗證（config）
+jsonschema>=4.23
+
+# Optional Dev
+pytest>=8.3
+rich>=13.7
+

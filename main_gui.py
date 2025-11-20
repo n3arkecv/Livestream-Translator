@@ -1,0 +1,133 @@
+import sys
+import os
+import asyncio
+import logging
+import threading
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QThread
+
+# Ensure project root is in path
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+from src.utils.event_bus import EventBus
+from src.utils.logger import SystemLogger
+from src.audio.capture import AudioCapture
+from src.transcription.stt_manager import STTManager
+from src.gui.main_window import MainWindow
+from src.gui.qt_event_bridge import QtEventBridge
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+class BackendWorker(QThread):
+    def __init__(self, bus, config, logger):
+        super().__init__()
+        self.bus = bus
+        self.config = config
+        self.logger = logger
+        self.loop = None
+        self.capture = None
+        self.stt_manager = None
+        self._ready_event = threading.Event()
+
+    def run(self):
+        self.logger.info("BackendWorker thread started")
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        
+        # Initialize components inside the thread to be safe
+        self.capture = AudioCapture(self.bus, self.config, self.logger)
+        self.stt_manager = STTManager(self.bus, self.config, self.logger)
+        
+        self._ready_event.set()
+        
+        try:
+            self.loop.run_forever()
+        except Exception as e:
+            self.logger.error(f"Backend loop error: {e}")
+        finally:
+            self.loop.close()
+            self.logger.info("BackendWorker thread stopped")
+
+    def wait_until_ready(self):
+        self._ready_event.wait()
+
+    def start_services(self):
+        if self.loop:
+            self.loop.call_soon_threadsafe(self._start_services_async)
+
+    def stop_services(self):
+        if self.loop:
+            self.loop.call_soon_threadsafe(self._stop_services_async)
+    
+    def stop_thread(self):
+        if self.loop:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+        self.quit()
+        self.wait()
+
+    def _start_services_async(self):
+        self.logger.info("Starting STT and Audio Capture...")
+        self.stt_manager.start_processing()
+        self.capture.start()
+
+    def _stop_services_async(self):
+        self.logger.info("Stopping STT and Audio Capture...")
+        self.capture.stop()
+        self.stt_manager.stop_processing()
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("Livestream Translator")
+
+    # 1. Shared Components
+    logger = SystemLogger("GUI_App")
+    bus = EventBus()
+    bridge = QtEventBridge(bus)
+    
+    # 2. Configuration (from smoke test)
+    config = {
+        "audio": {
+            "output_device": "default",
+            "use_loopback": True
+        },
+        "chunk": {
+            "size_ms": 3000,
+            "overlap_ms": 0
+        },
+        "stt": {
+            "mode": "local",
+            "model": "deepdml/faster-whisper-large-v3-turbo-ct2",
+            "device": "cuda",
+            "compute_type": "float16"
+        }
+    }
+
+    # 3. Backend Worker
+    worker = BackendWorker(bus, config, logger)
+    worker.start()
+    worker.wait_until_ready() # Wait for loop to initialize
+
+    # 4. GUI
+    window = MainWindow(bridge)
+    
+    # Connect Window signals to Backend
+    window.sig_start.connect(worker.start_services)
+    window.sig_stop.connect(worker.stop_services)
+    
+    window.show()
+
+    logger.info("Application started")
+    
+    exit_code = app.exec()
+    
+    # Cleanup
+    logger.info("Shutting down...")
+    worker.stop_services()
+    worker.stop_thread()
+    
+    sys.exit(exit_code)
+
+if __name__ == "__main__":
+    main()
+
