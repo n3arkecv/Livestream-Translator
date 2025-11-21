@@ -24,12 +24,12 @@ class STTManager:
         self.silence_counter = 0
         self.chunks_since_transcribe = 0
         self.VAD_THRESHOLD = 0.005 # Adjust based on noise floor
-        self.SILENCE_CHUNKS_THRESHOLD = 2 # 2 * 150ms = 300ms silence triggers finalize
-        self.MAX_BUFFER_DURATION = 15.0 # Force finalize after 15 seconds
-        self.TRANSCRIBE_INTERVAL = 2 # Transcribe every 2 chunks (300ms) to save GPU
+        self.SILENCE_CHUNKS_THRESHOLD = 2 # 2 * 100ms = 200-50 = 150ms silence triggers finalize
+        self.MAX_BUFFER_DURATION = 10.0 # Force finalize after 15 seconds
+        self.TRANSCRIBE_INTERVAL = 3 # Transcribe every 3 chunks (300-50 = 250ms) to save GPU
         
         # Use thread-safe queue for audio data transfer (can be called from any thread)
-        self.audio_queue = queue.Queue(maxsize=15)  # Thread-safe queue
+        self.audio_queue = queue.Queue(maxsize=20)  # Thread-safe queue
         
         self._setup_engine()
         

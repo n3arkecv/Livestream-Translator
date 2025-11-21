@@ -13,6 +13,7 @@ from src.utils.event_bus import EventBus
 from src.utils.logger import SystemLogger
 from src.audio.capture import AudioCapture
 from src.transcription.stt_manager import STTManager
+from src.translation.manager import TranslationManager
 from src.gui.main_window import MainWindow
 from src.gui.qt_event_bridge import QtEventBridge
 
@@ -28,6 +29,7 @@ class BackendWorker(QThread):
         self.loop = None
         self.capture = None
         self.stt_manager = None
+        self.translation_manager = None
         self._ready_event = threading.Event()
 
     def run(self):
@@ -38,6 +40,7 @@ class BackendWorker(QThread):
         # Initialize components inside the thread to be safe
         self.capture = AudioCapture(self.bus, self.config, self.logger)
         self.stt_manager = STTManager(self.bus, self.config, self.logger)
+        self.translation_manager = TranslationManager(self.bus, self.config)
         
         self._ready_event.set()
         
@@ -85,6 +88,8 @@ class BackendWorker(QThread):
         self.logger.info("Stopping STT and Audio Capture...")
         self.capture.stop()
         self.stt_manager.stop_processing()
+        if self.translation_manager:
+            self.translation_manager.stop()
 
 def main():
     app = QApplication(sys.argv)
@@ -103,7 +108,7 @@ def main():
         },
         "chunk": {
             "size_ms": 150,
-            "overlap_ms": 0
+            "overlap_ms": 50
         },
         "stt": {
             "mode": "local",
@@ -112,6 +117,29 @@ def main():
             "compute_type": "float16"
         }
     }
+
+    # Load User_config.txt
+    config_path = os.path.join(os.path.dirname(__file__), "User_config.txt")
+    if os.path.exists(config_path):
+        logger.info(f"Loading config from {config_path}")
+        with open(config_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    os.environ[key] = value # Set as env var for other components
+                    
+                    # Update config dict if applicable
+                    if key == "LLM_TRANSLATION_MODEL":
+                        # This might be used by translation manager, which reads from config or env?
+                        # TranslationManager uses config passed to it.
+                        config["llm_translation_model"] = value
+                    elif key == "LLM_SUMMARY_MODEL":
+                        config["llm_summary_model"] = value
+                    elif key == "USE_ORIGINAL_TEXT_FOR_CONTEXT":
+                        config["use_original_text_for_context"] = (value.lower() == "true")
 
     # 3. Backend Worker
     worker = BackendWorker(bus, config, logger)

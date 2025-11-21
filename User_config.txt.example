@@ -1,0 +1,23 @@
+# User Configuration
+# 
+# 使用說明：
+# 1. 複製此文件為 User_config.txt（不會被 git 追蹤）
+# 2. 填入您的 API keys 和設定
+# 3. 系統會自動讀取此文件中的環境變數
+
+# OpenAI API Key (用於 LLM 翻譯和 GPT-4o Transcribe)
+OPENAI_API_KEY=
+# Google API Key (可選，用於 Gemini STT)
+GOOGLE_API_KEY=
+
+# LLM 模型設定 (可選，預設為 gpt-4o-mini)
+# LLM_TRANSLATION_MODEL=gpt-4o-mini
+# LLM_SUMMARY_MODEL=gpt-4o-mini
+
+# Context 更新策略 (可選，預設為 True 使用原文)
+USE_ORIGINAL_TEXT_FOR_CONTEXT=True
+
+# 其他環境變數（可選）
+# YTTRANS_AUDIO_DEVICE=default
+# YTTRANS_PROFILE=default
+

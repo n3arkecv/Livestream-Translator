@@ -34,6 +34,7 @@ venv.bak/
 
 # API Keys & Secrets (NEVER commit these!)
 API_KEY.txt
+User_config.txt
 *.key
 *.secret
 .env
