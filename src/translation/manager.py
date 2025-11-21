@@ -48,9 +48,9 @@ class TranslationManager:
     async def handle_final_sentence(self, data: Dict):
         """
         Process a fully transcribed sentence.
-        Input data expected: {"text": "sentence text", ...}
+        Input data expected: {"sentence": "sentence text", ...}
         """
-        sentence_text = data.get("text", "")
+        sentence_text = data.get("sentence", "")
         if not sentence_text:
             return
 
@@ -62,13 +62,17 @@ class TranslationManager:
 
         # 1. Get Context
         context = self.context_manager.get_context()
+        self.logger.info(f"Context retrieved for ID {current_id}: {context[:20]}...")
 
         # 2. Translate (LLM1)
         # Notify start
         self.bus.emit("llm1.translate_started", {"id": current_id})
         
+        self.logger.info(f"Calling LLM translate for ID {current_id}")
         trans_result = await self.llm_client.translate(sentence_text, context)
         translated_text = trans_result.get("translated_text", "")
+        
+        self.logger.info(f"LLM translate result for ID {current_id}: {translated_text[:20]}...")
         
         if not translated_text:
             self.logger.warning(f"Translation failed for ID {current_id}")

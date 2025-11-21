@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit, QLabel, QGroupBox, QComboBox, QSpinBox
 from PySide6.QtCore import Signal, Slot
 from .overlay_window import OverlayWindow
+from .settings_window import SettingsWindow
 
 class MainWindow(QMainWindow):
     # Signals to control the backend
@@ -68,6 +69,11 @@ class MainWindow(QMainWindow):
 
         layout_btns.addWidget(self.btn_start)
         layout_btns.addWidget(self.btn_stop)
+        
+        self.btn_settings = QPushButton("Settings")
+        self.btn_settings.clicked.connect(self.on_settings_clicked)
+        layout_btns.addWidget(self.btn_settings)
+        
         layout_control.addLayout(layout_btns)
         
         grp_control.setLayout(layout_control)
@@ -127,6 +133,8 @@ class MainWindow(QMainWindow):
         self.bridge.sig_log.connect(self.append_log)
         self.bridge.sig_stt_partial.connect(self.overlay.update_partial)
         self.bridge.sig_stt_final.connect(self.overlay.on_final_sentence)
+        self.bridge.sig_translation.connect(self.overlay.update_translation)
+        self.bridge.sig_context.connect(self.overlay.update_context)
 
     def on_language_changed(self, index):
         lang_code = self.combo_lang.currentData()
@@ -159,6 +167,11 @@ class MainWindow(QMainWindow):
         self.combo_model.setEnabled(True) # Enable model change when stopped
         self.append_log("INFO", "Stopping services...")
         self.sig_stop.emit()
+
+    def on_settings_clicked(self):
+        settings = SettingsWindow(parent=self)
+        if settings.exec():
+            self.append_log("INFO", "Settings saved. Restart application for full effect.")
 
     def toggle_overlay(self, checked):
         if checked:

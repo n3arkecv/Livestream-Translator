@@ -64,6 +64,18 @@ class OverlayWindow(QWidget):
         shadow2.setOffset(1, 1)
         self.lbl_final.setGraphicsEffect(shadow2)
         
+        # 3. Translation Label (Cyan/Blue)
+        self.lbl_translation = QLabel("Translation Standby...")
+        self.lbl_translation.setStyleSheet("color: #00FFFF; font-weight: bold;")
+        self.lbl_translation.setWordWrap(True)
+        self.lbl_translation.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        
+        shadow4 = QGraphicsDropShadowEffect(self)
+        shadow4.setBlurRadius(10)
+        shadow4.setColor(QColor(0, 0, 0, 255))
+        shadow4.setOffset(1, 1)
+        self.lbl_translation.setGraphicsEffect(shadow4)
+
         # History Label (Gray/White, smaller?)
         self.lbl_history = QLabel("")
         self.lbl_history.setStyleSheet("color: #CCCCCC;")
@@ -75,15 +87,29 @@ class OverlayWindow(QWidget):
         shadow3.setColor(QColor(0, 0, 0, 255))
         shadow3.setOffset(1, 1)
         self.lbl_history.setGraphicsEffect(shadow3)
+        
+        # 4. Context Label (Bottom, smaller, Greenish)
+        self.lbl_context = QLabel("Context Standby...")
+        self.lbl_context.setStyleSheet("color: #90EE90; font-style: italic;")
+        self.lbl_context.setWordWrap(True)
+        self.lbl_context.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        
+        shadow5 = QGraphicsDropShadowEffect(self)
+        shadow5.setBlurRadius(8)
+        shadow5.setColor(QColor(0, 0, 0, 255))
+        shadow5.setOffset(1, 1)
+        self.lbl_context.setGraphicsEffect(shadow5)
 
         self.layout.addWidget(self.lbl_ongoing)
         self.layout.addWidget(self.lbl_final)
-        self.layout.addWidget(self.lbl_history) # History below
+        self.layout.addWidget(self.lbl_translation) # Translation below Final
+        self.layout.addWidget(self.lbl_history) # History below Translation
         
         self.layout.addStretch() # Push everything to top
+        self.layout.addWidget(self.lbl_context) # Context at bottom
         
         # Initial settings
-        self.resize(800, 300)
+        self.resize(800, 400) # Increased height for more content
         self.font_size = 24
         self.update_font()
         
@@ -128,8 +154,15 @@ class OverlayWindow(QWidget):
         font_trans = QFont("Segoe UI", int(self.font_size)) # Final same size
         self.lbl_final.setFont(font_trans)
         
+        font_translation = QFont("Segoe UI", int(self.font_size)) # Translation same size
+        self.lbl_translation.setFont(font_translation)
+        
         font_hist = QFont("Segoe UI", int(self.font_size * 0.8))
         self.lbl_history.setFont(font_hist)
+        
+        # Context much smaller (50%)
+        font_context = QFont("Segoe UI", int(self.font_size * 0.5))
+        self.lbl_context.setFont(font_context)
 
     def set_font_size(self, size):
         self.font_size = size
@@ -184,12 +217,14 @@ class OverlayWindow(QWidget):
             
         # Set new final
         self.lbl_final.setText(text)
+        # Keep old translation until new one arrives to avoid flickering "..."
+        # self.lbl_translation.setText("...") 
         
     def update_translation(self, text):
-        self.lbl_final.setText(text)
+        self.lbl_translation.setText(text)
         
     def update_context(self, text):
-        pass # Removed context label for now as per user request structure
+        self.lbl_context.setText(f"Context: {text}")
 
     # Painting for background
     def paintEvent(self, event):

@@ -33,6 +33,7 @@ class LLMClient:
         prompt = self.prompt_builder.build_translation_prompt(sentence, context)
         
         try:
+            self.logger.info(f"LLMClient: Sending translation request for: {sentence[:20]}...")
             start_time = __import__('time').time()
             response = await self.client.chat.completions.create(
                 model=self.translation_model,
@@ -47,6 +48,8 @@ class LLMClient:
             
             content = response.choices[0].message.content.strip()
             usage = response.usage
+            
+            self.logger.info(f"LLMClient: Translation received in {duration:.2f}s: {content[:20]}...")
             
             return {
                 "translated_text": content,
@@ -69,6 +72,7 @@ class LLMClient:
         prompt = self.prompt_builder.build_summary_prompt(old_context, sentence, use_original_text=use_original)
         
         try:
+            self.logger.info(f"LLMClient: Sending context update request...")
             response = await self.client.chat.completions.create(
                 model=self.summary_model,
                 messages=[
@@ -78,7 +82,9 @@ class LLMClient:
                 temperature=0.3,
                 max_tokens=500
             )
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content.strip()
+            self.logger.info(f"LLMClient: Context updated: {content[:20]}...")
+            return content
         except Exception as e:
             self.logger.error(f"LLM Context Update Error: {e}")
             return old_context # Fallback to old context
