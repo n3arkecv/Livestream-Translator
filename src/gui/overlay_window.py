@@ -24,7 +24,7 @@ class OverlayWindow(QWidget):
         self.layout.setSpacing(5)
         
         # 1. Ongoing Sentence (Partial) with Shimmer
-        self.lbl_ongoing = QLabel("Listening...")
+        self.lbl_ongoing = QLabel("Standby for startup...")
         # We will use custom painting or timer-based stylesheet update for shimmer
         self.lbl_ongoing.setStyleSheet("color: #E0FFFF; font-weight: bold; font-style: italic;")
         self.lbl_ongoing.setWordWrap(True)
@@ -307,4 +307,3 @@ class OverlayWindow(QWidget):
         self.resizing = False
         self.resize_edge = None
         self.setCursor(Qt.CursorShape.ArrowCursor)
-
