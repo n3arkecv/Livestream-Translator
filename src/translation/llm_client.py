@@ -24,13 +24,19 @@ class LLMClient:
         
         self.prompt_builder = PromptBuilder()
         self.logger = logging.getLogger("System")
+        
+        # Default target language
+        self.target_lang = config.get("target_translation_language", "Traditional Chinese")
+
+    def set_target_language(self, lang: str):
+        self.target_lang = lang
 
     async def translate(self, sentence: str, context: str) -> Dict:
         """
         Translates a sentence using the LLM.
         Returns a dictionary with the translation and token usage.
         """
-        prompt = self.prompt_builder.build_translation_prompt(sentence, context)
+        prompt = self.prompt_builder.build_translation_prompt(sentence, context, target_lang=self.target_lang)
         
         try:
             self.logger.info(f"LLMClient: Sending translation request for: {sentence[:20]}...")

@@ -39,6 +39,17 @@ class TranslationManager:
         # Subscribe to events
         self.bus.subscribe("stt.final_sentence", self._on_final_sentence_wrapper)
         
+    def set_target_language(self, lang: str):
+        if self.llm_client:
+            self.llm_client.set_target_language(lang)
+
+    def reset_context(self):
+        """Resets the context manager and updates overlay."""
+        if self.context_manager:
+            self.context_manager.update_context("")
+            self.bus.emit("llm2.context_update_finished", {"context": ""})
+            self.logger.info("Translation Context Reset.")
+        
     def _on_final_sentence_wrapper(self, data: Dict):
         """
         Wrapper to schedule the async handler on the event loop.

@@ -66,12 +66,37 @@ class BackendWorker(QThread):
     def set_language(self, lang_code):
         if self.loop:
             self.loop.call_soon_threadsafe(lambda: self.stt_manager.set_language(lang_code))
+            
+    def set_translation_language(self, lang_name):
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: self.translation_manager.set_target_language(lang_name))
+            
+    def reset_context(self):
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: self.translation_manager.reset_context())
     
     def set_model(self, model_name):
         if self.loop:
             # Model loading is heavy, maybe offload to executor? 
             # For now, running it in loop might freeze audio processing for a few seconds, which is acceptable during config change.
             self.loop.call_soon_threadsafe(lambda: self.stt_manager.set_model(model_name))
+
+    def set_audio_device(self, device_index):
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: self._update_audio_device_async(device_index))
+
+    def _update_audio_device_async(self, device_index):
+        self.logger.info(f"Updating audio device to index: {device_index}")
+        if "audio" not in self.config:
+            self.config["audio"] = {}
+        self.config["audio"]["device_index"] = device_index
+        
+        # If capture is initialized and running, restart it
+        if self.capture and self.capture.stream and self.capture.stream.is_active():
+             self.logger.info("Restarting audio capture with new device...")
+             self.capture.stop()
+             # Give it a moment to fully close if needed, though stop() is synchronous usually
+             self.capture.start()
 
     def stop_thread(self):
         if self.loop:
@@ -107,8 +132,8 @@ def main():
             "use_loopback": True
         },
         "chunk": {
-            "size_ms": 150,
-            "overlap_ms": 50
+            "size_ms": 200,
+            "overlap_ms": 0
         },
         "stt": {
             "mode": "local",
@@ -140,6 +165,8 @@ def main():
                         config["llm_summary_model"] = value
                     elif key == "USE_ORIGINAL_TEXT_FOR_CONTEXT":
                         config["use_original_text_for_context"] = (value.lower() == "true")
+                    elif key == "TARGET_TRANSLATION_LANGUAGE":
+                        config["target_translation_language"] = value
 
     # 3. Backend Worker
     worker = BackendWorker(bus, config, logger)
@@ -153,7 +180,10 @@ def main():
     window.sig_start.connect(worker.start_services)
     window.sig_stop.connect(worker.stop_services)
     window.sig_update_language.connect(worker.set_language)
+    window.sig_update_translation_language.connect(worker.set_translation_language)
     window.sig_update_model.connect(worker.set_model)
+    window.sig_update_audio_device.connect(worker.set_audio_device)
+    window.sig_reset_context.connect(worker.reset_context)
     
     window.show()
 

@@ -1,13 +1,14 @@
 import os
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit, 
                                QCheckBox, QPushButton, QHBoxLayout, QMessageBox, 
-                               QFormLayout, QGroupBox)
+                               QFormLayout, QGroupBox, QSlider, QComboBox)
 from PySide6.QtCore import Qt
+from src.utils.localization import i18n
 
 class SettingsWindow(QDialog):
     def __init__(self, config_path="User_config.txt", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Settings")
+        self.setWindowTitle(i18n.get("settings_title"))
         self.resize(500, 400)
         self.config_path = config_path
         self.config_data = {}
@@ -16,37 +17,58 @@ class SettingsWindow(QDialog):
         layout = QVBoxLayout(self)
         
         # Form
-        form_group = QGroupBox("Configuration")
+        form_group = QGroupBox(i18n.get("grp_config"))
         self.form_layout = QFormLayout()
         
         # Fields
         self.txt_openai_key = QLineEdit()
         self.txt_openai_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.form_layout.addRow("OpenAI API Key:", self.txt_openai_key)
+        self.form_layout.addRow(i18n.get("lbl_openai_key"), self.txt_openai_key)
         
         self.txt_google_key = QLineEdit()
         self.txt_google_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.form_layout.addRow("Google API Key:", self.txt_google_key)
+        self.form_layout.addRow(i18n.get("lbl_google_key"), self.txt_google_key)
         
         self.txt_llm_trans_model = QLineEdit()
         self.txt_llm_trans_model.setPlaceholderText("gpt-4o-mini")
-        self.form_layout.addRow("Translation Model:", self.txt_llm_trans_model)
+        self.form_layout.addRow(i18n.get("lbl_trans_model"), self.txt_llm_trans_model)
         
         self.txt_llm_summary_model = QLineEdit()
         self.txt_llm_summary_model.setPlaceholderText("gpt-4o-mini")
-        self.form_layout.addRow("Summary Model:", self.txt_llm_summary_model)
+        self.form_layout.addRow(i18n.get("lbl_summary_model"), self.txt_llm_summary_model)
         
-        self.chk_use_original = QCheckBox("Use Original Text for Context")
+        self.chk_use_original = QCheckBox(i18n.get("chk_use_original"))
         self.form_layout.addRow("", self.chk_use_original)
+        
+        # GUI Language
+        self.combo_gui_lang = QComboBox()
+        self.combo_gui_lang.addItem("English", "en")
+        self.combo_gui_lang.addItem("日本語", "ja")
+        self.combo_gui_lang.addItem("繁體中文", "zh-TW")
+        self.form_layout.addRow(i18n.get("lbl_gui_language"), self.combo_gui_lang)
+
+        # Overlay Opacity
+        self.slider_opacity = QSlider(Qt.Orientation.Horizontal)
+        self.slider_opacity.setRange(0, 100)
+        self.slider_opacity.setValue(40) # Default
+        self.slider_opacity.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.slider_opacity.setTickInterval(10)
+        self.lbl_opacity_val = QLabel("40%")
+        self.slider_opacity.valueChanged.connect(lambda v: self.lbl_opacity_val.setText(f"{v}%"))
+        
+        layout_opacity = QHBoxLayout()
+        layout_opacity.addWidget(self.slider_opacity)
+        layout_opacity.addWidget(self.lbl_opacity_val)
+        self.form_layout.addRow(i18n.get("lbl_overlay_opacity"), layout_opacity)
         
         form_group.setLayout(self.form_layout)
         layout.addWidget(form_group)
         
         # Buttons
         btn_layout = QHBoxLayout()
-        self.btn_save = QPushButton("Save")
+        self.btn_save = QPushButton(i18n.get("btn_save"))
         self.btn_save.clicked.connect(self.save_config)
-        self.btn_cancel = QPushButton("Cancel")
+        self.btn_cancel = QPushButton(i18n.get("btn_cancel"))
         self.btn_cancel.clicked.connect(self.reject)
         
         btn_layout.addStretch()
@@ -83,6 +105,20 @@ class SettingsWindow(QDialog):
             use_orig = self.config_data.get("USE_ORIGINAL_TEXT_FOR_CONTEXT", "True")
             self.chk_use_original.setChecked(use_orig.lower() == "true")
             
+            # GUI Language
+            current_lang = self.config_data.get("GUI_LANGUAGE", "en")
+            index = self.combo_gui_lang.findData(current_lang)
+            if index >= 0:
+                self.combo_gui_lang.setCurrentIndex(index)
+
+            opacity = self.config_data.get("OVERLAY_OPACITY", "40")
+            try:
+                val = int(opacity)
+                self.slider_opacity.setValue(val)
+                self.lbl_opacity_val.setText(f"{val}%")
+            except ValueError:
+                self.slider_opacity.setValue(40)
+            
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to load config: {e}")
 
@@ -104,6 +140,10 @@ class SettingsWindow(QDialog):
             del self.config_data["LLM_SUMMARY_MODEL"]
             
         self.config_data["USE_ORIGINAL_TEXT_FOR_CONTEXT"] = str(self.chk_use_original.isChecked())
+        
+        self.config_data["GUI_LANGUAGE"] = self.combo_gui_lang.currentData()
+        
+        self.config_data["OVERLAY_OPACITY"] = str(self.slider_opacity.value())
 
         try:
             # Read original file to preserve comments if possible, or just overwrite?

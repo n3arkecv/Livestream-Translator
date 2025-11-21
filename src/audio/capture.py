@@ -75,43 +75,73 @@ class AudioCapture:
         
         self._wav_file = None
 
+    @staticmethod
+    def list_audio_devices() -> list[dict]:
+        """Lists available audio input devices (including loopback)."""
+        devices = []
+        try:
+            p = pyaudio.PyAudio()
+            try:
+                wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+                host_api_index = wasapi_info["index"]
+            except OSError:
+                # Fallback or error if WASAPI not found
+                p.terminate()
+                return []
+
+            for i in range(p.get_device_count()):
+                try:
+                    dev = p.get_device_info_by_index(i)
+                    if dev["hostApi"] == host_api_index and dev["maxInputChannels"] > 0:
+                        devices.append({
+                            "index": i,
+                            "name": dev["name"],
+                            "is_loopback": dev.get("isLoopbackDevice", False)
+                        })
+                except Exception:
+                    pass
+            p.terminate()
+        except Exception as e:
+            SystemLogger("AudioCapture").error(f"Error listing devices: {e}")
+        return devices
+
     def start(self):
         """Starts the audio capture stream."""
         try:
             self.pyaudio_instance = pyaudio.PyAudio()
             wasapi_info = self.pyaudio_instance.get_host_api_info_by_type(pyaudio.paWASAPI)
             
-            # In PyAudioWPatch, Loopback devices are often enumerated separately as inputs.
-            # We need to find the loopback device corresponding to our output device
-            # OR open the output device as a loopback stream if supported.
+            target_device = None
+            device_index = self.config.get("audio", {}).get("device_index")
             
-            # According to PyAudioWPatch docs/examples:
-            # To record loopback, we should look for a device that is a loopback of the default output.
-            # PyAudioWPatch enumerates "Loopback" devices.
+            if device_index is not None:
+                try:
+                    target_device = self.pyaudio_instance.get_device_info_by_index(device_index)
+                    self.logger.info(f"Using configured device: {target_device['name']} (Index: {device_index})")
+                except Exception as e:
+                    self.logger.error(f"Failed to find configured device index {device_index}, falling back to default.", exc=e)
             
-            default_speakers = self.pyaudio_instance.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+            if target_device is None:
+                # Fallback: Default behavior (Find default loopback)
+                default_speakers = self.pyaudio_instance.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+                
+                if not default_speakers["isLoopbackDevice"]:
+                    found_loopback = False
+                    for loopback in self.pyaudio_instance.get_loopback_device_info_generator():
+                        if default_speakers["name"] in loopback["name"]:
+                            default_speakers = loopback
+                            found_loopback = True
+                            break
+                    if not found_loopback:
+                        self.logger.warning("Could not find specific loopback device, trying default loopback...")
+                
+                target_device = default_speakers
+                self.logger.info(f"Selected Default Device: {target_device['name']}")
             
-            # If it's not already a loopback device, look for its corresponding loopback device
-            if not default_speakers["isLoopbackDevice"]:
-                found_loopback = False
-                for loopback in self.pyaudio_instance.get_loopback_device_info_generator():
-                     # Match device name (PyAudioWPatch loopback devices have the same name as the output device)
-                    if default_speakers["name"] in loopback["name"]:
-                        default_speakers = loopback
-                        found_loopback = True
-                        break
-                if not found_loopback:
-                     self.logger.warning("Could not find specific loopback device, trying default loopback...")
-                     # Fallback: Try to find any default loopback if possible or just fail
-                     # Usually the first loopback device is the default one?
-                     # Let's just proceed with what we found and hope for the best or raise error.
+            native_rate = int(target_device["defaultSampleRate"])
+            native_channels = int(target_device["maxInputChannels"])
             
-            self.logger.info(f"Selected Device: {default_speakers['name']}")
-            
-            native_rate = int(default_speakers["defaultSampleRate"])
-            native_channels = int(default_speakers["maxInputChannels"]) # Loopback has input channels
-            
-            self.logger.info(f"Opening stream: Rate={native_rate}, Channels={native_channels}, DeviceIdx={default_speakers['index']}")
+            self.logger.info(f"Opening stream: Rate={native_rate}, Channels={native_channels}, DeviceIdx={target_device['index']}")
 
             self.stream = self.pyaudio_instance.open(
                 format=pyaudio.paInt16,
@@ -119,11 +149,11 @@ class AudioCapture:
                 rate=native_rate,
                 frames_per_buffer=4096,
                 input=True,
-                input_device_index=default_speakers["index"]
+                input_device_index=target_device["index"]
             )
             
             self.bus.emit("audio.stream_opened", {
-                "device_name": default_speakers["name"],
+                "device_name": target_device["name"],
                 "sample_rate": native_rate,
                 "channels": native_channels
             })

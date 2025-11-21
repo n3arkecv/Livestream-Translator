@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsDropShadowEffect
 from PySide6.QtCore import Qt, QPoint, QRect, QTimer
 from PySide6.QtGui import QFont, QColor, QCursor, QLinearGradient, QPalette, QBrush
+from src.utils.localization import i18n
 
 class OverlayWindow(QWidget):
     MARGIN = 10  # Resize boundary width
@@ -24,7 +25,7 @@ class OverlayWindow(QWidget):
         self.layout.setSpacing(5)
         
         # 1. Ongoing Sentence (Partial) with Shimmer
-        self.lbl_ongoing = QLabel("Standby for startup...")
+        self.lbl_ongoing = QLabel(i18n.get("overlay_ongoing"))
         # We will use custom painting or timer-based stylesheet update for shimmer
         self.lbl_ongoing.setStyleSheet("color: #E0FFFF; font-weight: bold; font-style: italic;")
         self.lbl_ongoing.setWordWrap(True)
@@ -65,7 +66,7 @@ class OverlayWindow(QWidget):
         self.lbl_final.setGraphicsEffect(shadow2)
         
         # 3. Translation Label (Cyan/Blue)
-        self.lbl_translation = QLabel("Translation Standby...")
+        self.lbl_translation = QLabel(i18n.get("overlay_translation"))
         self.lbl_translation.setStyleSheet("color: #00FFFF; font-weight: bold;")
         self.lbl_translation.setWordWrap(True)
         self.lbl_translation.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
@@ -89,7 +90,7 @@ class OverlayWindow(QWidget):
         self.lbl_history.setGraphicsEffect(shadow3)
         
         # 4. Context Label (Bottom, smaller, Greenish)
-        self.lbl_context = QLabel("Context Standby...")
+        self.lbl_context = QLabel(i18n.get("overlay_context"))
         self.lbl_context.setStyleSheet("color: #90EE90; font-style: italic;")
         self.lbl_context.setWordWrap(True)
         self.lbl_context.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
@@ -184,6 +185,14 @@ class OverlayWindow(QWidget):
     def set_opacity(self, opacity):
         self.setWindowOpacity(opacity)
 
+    def set_background_opacity(self, opacity_percent):
+        """
+        Set background opacity (0-100)
+        """
+        alpha = int(opacity_percent * 255 / 100)
+        self.bg_color.setAlpha(alpha)
+        self.update()
+
     def update_partial(self, text):
         self.lbl_ongoing.setText(text)
         if not self.is_transcribing:
@@ -195,7 +204,8 @@ class OverlayWindow(QWidget):
         # Stop shimmer
         self.is_transcribing = False
         self.shimmer_timer.stop()
-        self.lbl_ongoing.setText("")
+        # self.lbl_ongoing.setText("") # Keep empty or reset text? Empty is better.
+        self.lbl_ongoing.setText("") 
         self.lbl_ongoing.hide() # Hide ongoing area to save space? Or keep it?
         # Let's keep it but empty so layout doesn't jump too much if using fixed height
         # But VBoxLayout will shrink it.
@@ -225,6 +235,9 @@ class OverlayWindow(QWidget):
         
     def update_context(self, text):
         self.lbl_context.setText(f"Context: {text}")
+
+    def set_context_visibility(self, visible):
+        self.lbl_context.setVisible(visible)
 
     # Painting for background
     def paintEvent(self, event):
