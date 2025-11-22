@@ -13,6 +13,8 @@ class MainWindow(QMainWindow):
     sig_update_language = Signal(str)
     sig_update_translation_language = Signal(str)
     sig_update_model = Signal(str)
+    sig_update_device = Signal(str)  # New signal for device (cpu/cuda)
+    sig_update_compute_type = Signal(str)  # New signal for compute type (int8/float16)
     sig_update_audio_device = Signal(object) # Can be int or None
     sig_reset_context = Signal()
 
@@ -27,24 +29,92 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # Control Panel
-        self.grp_control = QGroupBox(i18n.get("grp_control"))
-        layout_control = QVBoxLayout()
+        # STT Model Settings Panel (New Section)
+        self.grp_stt_settings = QGroupBox(i18n.get("grp_stt_settings"))
+        layout_stt_settings = QVBoxLayout()
         
         # Model Selector
         layout_model = QHBoxLayout()
         self.lbl_model = QLabel(i18n.get("lbl_model"))
         self.combo_model = QComboBox()
-        # Using full repo paths for automatic download by faster-whisper
-        self.combo_model.addItem("Turbo v3 (High Accuracy)", "deepdml/faster-whisper-large-v3-turbo-ct2")
-        self.combo_model.addItem("Small (Balanced)", "small")
-        self.combo_model.addItem("Tiny (Fastest)", "tiny")
-        self.combo_model.addItem("Tiny English (Fastest EN)", "tiny.en")
+        
+        # Define model structure
+        # Format: (Display Name, Model ID)
+        # If Model ID is None, it's a category header
+        model_structure = [
+            ("--- Turbo Model ---", None),
+            ("Turbo v3 (High Accuracy)", "deepdml/faster-whisper-large-v3-turbo-ct2"),
+            
+            ("--- En Only Models ---", None),
+            ("Tiny.en", "tiny.en"),
+            ("Base.en", "base.en"),
+            ("Small.en", "small.en"),
+            ("Medium.en", "medium.en"),
+            
+            ("--- Multilingual Models ---", None),
+            ("Tiny", "tiny"),
+            ("Base", "base"),
+            ("Small", "small"),
+            ("Medium", "medium"),
+            
+            ("--- Large Models ---", None),
+            ("Large v1", "large-v1"),
+            ("Large v2", "large-v2"),
+            ("Large v3", "large-v3"),
+            
+            ("--- Distill Models ---", None),
+            ("Distil Small.en", "distil-small.en"),
+            ("Distil Medium.en", "distil-medium.en"),
+            ("Distil Large v3", "distil-large-v3"),
+        ]
+
+        for display, model_id in model_structure:
+            self.combo_model.addItem(display, model_id)
+            if model_id is None:
+                # Disable the header item
+                index = self.combo_model.count() - 1
+                self.combo_model.model().item(index).setEnabled(False)
+                # Optional: Make it look like a header (e.g. bold) - might need custom delegate or stylesheet, 
+                # but simple disable is enough for now as requested "segregate... with title"
+
+        # Select Turbo v3 by default (index 1, since index 0 is header)
+        self.combo_model.setCurrentIndex(1)
         self.combo_model.currentIndexChanged.connect(self.on_model_changed)
         
         layout_model.addWidget(self.lbl_model)
         layout_model.addWidget(self.combo_model)
-        layout_control.addLayout(layout_model)
+        layout_stt_settings.addLayout(layout_model)
+
+        # Device Selector (CPU/CUDA)
+        layout_device = QHBoxLayout()
+        self.lbl_device = QLabel(i18n.get("lbl_device"))
+        self.combo_device = QComboBox()
+        self.combo_device.addItem("CUDA (GPU)", "cuda")
+        self.combo_device.addItem("CPU", "cpu")
+        self.combo_device.currentIndexChanged.connect(self.on_device_changed)
+        
+        layout_device.addWidget(self.lbl_device)
+        layout_device.addWidget(self.combo_device)
+        layout_stt_settings.addLayout(layout_device)
+
+        # Compute Type Selector (int8/fp16)
+        layout_compute = QHBoxLayout()
+        self.lbl_compute_type = QLabel(i18n.get("lbl_compute_type"))
+        self.combo_compute_type = QComboBox()
+        self.combo_compute_type.addItem("float16 (Higher Quality)", "float16")
+        self.combo_compute_type.addItem("int8 (Faster)", "int8")
+        self.combo_compute_type.currentIndexChanged.connect(self.on_compute_type_changed)
+        
+        layout_compute.addWidget(self.lbl_compute_type)
+        layout_compute.addWidget(self.combo_compute_type)
+        layout_stt_settings.addLayout(layout_compute)
+        
+        self.grp_stt_settings.setLayout(layout_stt_settings)
+        main_layout.addWidget(self.grp_stt_settings)
+
+        # Control Panel
+        self.grp_control = QGroupBox(i18n.get("grp_control"))
+        layout_control = QVBoxLayout()
 
         # Audio Device Selector
         layout_audio = QHBoxLayout()
@@ -197,6 +267,11 @@ class MainWindow(QMainWindow):
         # Initial population of audio devices
         self.refresh_audio_devices()
 
+        # Initialize device and compute type from config (will be set by main_gui)
+        # Default to CUDA and float16
+        self.combo_device.setCurrentIndex(0)  # CUDA by default
+        self.combo_compute_type.setCurrentIndex(0)  # float16 by default
+
     def load_overlay_settings(self):
         import os
         config_path = "User_config.txt"
@@ -270,6 +345,28 @@ class MainWindow(QMainWindow):
         self.append_log("INFO", f"Switching model to: {model_name} (may take a few seconds)")
         self.sig_update_model.emit(model_name)
 
+    def on_device_changed(self, index):
+        device = self.combo_device.currentData()
+        self.append_log("INFO", f"Switching device to: {device}")
+        
+        # Lock compute type to int8 if CPU is selected
+        if device == "cpu":
+            # Find index for int8
+            index_int8 = self.combo_compute_type.findData("int8")
+            if index_int8 != -1:
+                self.combo_compute_type.setCurrentIndex(index_int8)
+            self.combo_compute_type.setEnabled(False)
+            self.append_log("INFO", "Compute type locked to int8 for CPU")
+        else:
+            self.combo_compute_type.setEnabled(True)
+            
+        self.sig_update_device.emit(device)
+
+    def on_compute_type_changed(self, index):
+        compute_type = self.combo_compute_type.currentData()
+        self.append_log("INFO", f"Switching compute type to: {compute_type}")
+        self.sig_update_compute_type.emit(compute_type)
+
     def on_font_size_changed(self, index):
         size = self.combo_size.currentData()
         if size:
@@ -282,13 +379,19 @@ class MainWindow(QMainWindow):
         if checked:
             # Start
             self.btn_start_stop.setText(i18n.get("btn_stop"))
-            self.combo_model.setEnabled(False) # Disable model change during run
+            # Disable STT settings during run
+            self.combo_model.setEnabled(False)
+            self.combo_device.setEnabled(False)
+            self.combo_compute_type.setEnabled(False)
             self.append_log("INFO", "Starting services...")
             self.sig_start.emit()
         else:
             # Stop
             self.btn_start_stop.setText(i18n.get("btn_start"))
-            self.combo_model.setEnabled(True) # Enable model change when stopped
+            # Enable STT settings when stopped
+            self.combo_model.setEnabled(True)
+            self.combo_device.setEnabled(True)
+            self.combo_compute_type.setEnabled(True)
             self.append_log("INFO", "Stopping services...")
             self.sig_stop.emit()
 
@@ -302,8 +405,11 @@ class MainWindow(QMainWindow):
 
     def update_ui_text(self):
         self.setWindowTitle(i18n.get("window_title"))
-        self.grp_control.setTitle(i18n.get("grp_control"))
+        self.grp_stt_settings.setTitle(i18n.get("grp_stt_settings"))
         self.lbl_model.setText(i18n.get("lbl_model"))
+        self.lbl_device.setText(i18n.get("lbl_device"))
+        self.lbl_compute_type.setText(i18n.get("lbl_compute_type"))
+        self.grp_control.setTitle(i18n.get("grp_control"))
         self.lbl_audio.setText(i18n.get("lbl_audio_input"))
         self.btn_refresh_audio.setToolTip(i18n.get("btn_refresh_tooltip"))
         self.lbl_lang.setText(i18n.get("lbl_stt_lang"))

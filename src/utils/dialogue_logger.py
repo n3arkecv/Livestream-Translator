@@ -42,25 +42,35 @@ class DialogueLogger:
         """
         Appends a record to the log.
         """
-        record["timestamp"] = datetime.now().isoformat()
-        record["session_id"] = self.session_id
-        
-        if self.format == "jsonl":
-            json.dump(record, self.file_handle, ensure_ascii=False)
-            self.file_handle.write("\n")
-        else:
-            # CSV mapping
-            self.writer.writerow([
-                record.get("timestamp"),
-                record.get("session_id"),
-                record.get("sentence_id"),
-                record.get("source_sentence"),
-                record.get("translated_sentence"),
-                record.get("scenario_context"),
-                record.get("latency_ms")
-            ])
+        # Check if file is closed (e.g. due to stop() being called while task was pending)
+        was_closed = False
+        if self.file_handle.closed:
+            self._open_file()
+            was_closed = True
+
+        try:
+            record["timestamp"] = datetime.now().isoformat()
+            record["session_id"] = self.session_id
             
-        self.file_handle.flush()
+            if self.format == "jsonl":
+                json.dump(record, self.file_handle, ensure_ascii=False)
+                self.file_handle.write("\n")
+            else:
+                # CSV mapping
+                self.writer.writerow([
+                    record.get("timestamp"),
+                    record.get("session_id"),
+                    record.get("sentence_id"),
+                    record.get("source_sentence"),
+                    record.get("translated_sentence"),
+                    record.get("scenario_context"),
+                    record.get("latency_ms")
+                ])
+                
+            self.file_handle.flush()
+        finally:
+            if was_closed:
+                self.close()
 
     def close(self):
         if self.file_handle:

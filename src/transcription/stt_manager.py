@@ -58,6 +58,11 @@ class STTManager:
         else:
             self.logger.warning("Engine does not support model reloading")
 
+    def reload_engine(self):
+        """Reloads the entire STT engine with current config."""
+        self.logger.info("Reloading STT engine with updated configuration...")
+        self._setup_engine()
+
     def _setup_engine(self):
         stt_config = self.config.get("stt", {})
         if self.mode == "api":

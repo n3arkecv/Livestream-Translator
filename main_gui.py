@@ -85,6 +85,34 @@ class BackendWorker(QThread):
         if self.loop:
             self.loop.call_soon_threadsafe(lambda: self._update_audio_device_async(device_index))
 
+    def set_device(self, device):
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: self._update_device_async(device))
+
+    def set_compute_type(self, compute_type):
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: self._update_compute_type_async(compute_type))
+
+    def _update_device_async(self, device):
+        self.logger.info(f"Updating STT device to: {device}")
+        if "stt" not in self.config:
+            self.config["stt"] = {}
+        self.config["stt"]["device"] = device
+        
+        # Reload the STT engine with new device
+        if self.stt_manager:
+            self.stt_manager.reload_engine()
+
+    def _update_compute_type_async(self, compute_type):
+        self.logger.info(f"Updating STT compute type to: {compute_type}")
+        if "stt" not in self.config:
+            self.config["stt"] = {}
+        self.config["stt"]["compute_type"] = compute_type
+        
+        # Reload the STT engine with new compute type
+        if self.stt_manager:
+            self.stt_manager.reload_engine()
+
     def _update_audio_device_async(self, device_index):
         self.logger.info(f"Updating audio device to index: {device_index}")
         if "audio" not in self.config:
@@ -182,6 +210,8 @@ def main():
     window.sig_update_language.connect(worker.set_language)
     window.sig_update_translation_language.connect(worker.set_translation_language)
     window.sig_update_model.connect(worker.set_model)
+    window.sig_update_device.connect(worker.set_device)
+    window.sig_update_compute_type.connect(worker.set_compute_type)
     window.sig_update_audio_device.connect(worker.set_audio_device)
     window.sig_reset_context.connect(worker.reset_context)
     
