@@ -160,8 +160,8 @@ def main():
             "use_loopback": True
         },
         "chunk": {
-            "size_ms": 200,
-            "overlap_ms": 0
+            "size_ms": 250,
+            "overlap_ms": 50
         },
         "stt": {
             "mode": "local",
