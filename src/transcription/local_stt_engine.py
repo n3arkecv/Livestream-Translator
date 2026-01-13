@@ -96,7 +96,7 @@ class LocalSTTEngine(STTEngine):
                     audio_chunk, 
                     beam_size=5, 
                     language=self.target_language, # Use configured language
-                    condition_on_previous_text=False,
+                    condition_on_previous_text=True,
                     vad_filter=True, # Re-enable VAD
                     vad_parameters=dict(min_silence_duration_ms=500) # Default 500
                 ))
