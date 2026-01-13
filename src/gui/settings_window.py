@@ -40,6 +40,9 @@ class SettingsWindow(QDialog):
         self.chk_use_original = QCheckBox(i18n.get("chk_use_original"))
         self.form_layout.addRow("", self.chk_use_original)
         
+        self.chk_skip_req_check = QCheckBox(i18n.get("chk_skip_req_check"))
+        self.form_layout.addRow("", self.chk_skip_req_check)
+        
         # GUI Language
         self.combo_gui_lang = QComboBox()
         self.combo_gui_lang.addItem("English", "en")
@@ -105,6 +108,9 @@ class SettingsWindow(QDialog):
             use_orig = self.config_data.get("USE_ORIGINAL_TEXT_FOR_CONTEXT", "True")
             self.chk_use_original.setChecked(use_orig.lower() == "true")
             
+            skip_req = self.config_data.get("SKIP_REQUIREMENTS_CHECK", "False")
+            self.chk_skip_req_check.setChecked(skip_req.lower() == "true")
+            
             # GUI Language
             current_lang = self.config_data.get("GUI_LANGUAGE", "en")
             index = self.combo_gui_lang.findData(current_lang)
@@ -140,6 +146,7 @@ class SettingsWindow(QDialog):
             del self.config_data["LLM_SUMMARY_MODEL"]
             
         self.config_data["USE_ORIGINAL_TEXT_FOR_CONTEXT"] = str(self.chk_use_original.isChecked())
+        self.config_data["SKIP_REQUIREMENTS_CHECK"] = str(self.chk_skip_req_check.isChecked())
         
         self.config_data["GUI_LANGUAGE"] = self.combo_gui_lang.currentData()
         

@@ -36,3 +36,8 @@ OVERLAY_OPACITY=40
 # 介面語言 (en, ja, zh-TW)
 GUI_LANGUAGE=zh-TW
 
+# 啟動設定
+# 是否跳過 Launch.bat 中的依賴檢查 (預設為 False)
+# 開啟後啟動速度會加快，但若依賴遺失則可能無法啟動
+SKIP_REQUIREMENTS_CHECK=False
+

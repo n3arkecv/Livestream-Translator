@@ -38,7 +38,8 @@ class LocalizationManager:
             "overlay_ongoing": "Standby for startup...",
             "overlay_translation": "Translation Standby...",
             "overlay_context": "Context Standby...",
-            "lbl_gui_language": "GUI Language:"
+            "lbl_gui_language": "GUI Language:",
+            "chk_skip_req_check": "Skip environment requirements check (Faster launch)"
         },
         "ja": {
             "window_title": "ライブ配信翻訳コントロール",
@@ -75,7 +76,8 @@ class LocalizationManager:
             "overlay_ongoing": "起動待機中...",
             "overlay_translation": "翻訳待機中...",
             "overlay_context": "コンテキスト待機中...",
-            "lbl_gui_language": "GUI言語:"
+            "lbl_gui_language": "GUI言語:",
+            "chk_skip_req_check": "環境依存関係のチェックをスキップする (起動が速くなります)"
         },
         "zh-TW": {
             "window_title": "直播翻譯控制台",
@@ -112,7 +114,8 @@ class LocalizationManager:
             "overlay_ongoing": "等待啟動...",
             "overlay_translation": "翻譯待命...",
             "overlay_context": "情境待命...",
-            "lbl_gui_language": "介面語言:"
+            "lbl_gui_language": "介面語言:",
+            "chk_skip_req_check": "跳過環境依賴檢查 (啟動更快速)"
         }
     }
 
