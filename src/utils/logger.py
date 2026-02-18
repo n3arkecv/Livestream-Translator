@@ -10,6 +10,7 @@ class SystemLogger:
         self.logger.setLevel(logging.DEBUG)
         
         if not self.logger.handlers:
+            self.logger.propagate = False
             handler = logging.StreamHandler()
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             handler.setFormatter(formatter)

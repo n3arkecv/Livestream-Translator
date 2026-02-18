@@ -8,12 +8,17 @@ class APISTTEngine(STTEngine):
         self.config = api_config
         self.logger = logger
         self.provider = api_config.get("provider", "openai")
-        self.model = api_config.get("model", "gpt-4o-mini-transcribe") # Note: real model name might differ
+        self.model = api_config.get("model", "whisper-1")
         self.api_key_env = api_config.get("api_key_env", "OPENAI_API_KEY")
         self.api_key = os.environ.get(self.api_key_env)
+        self.lang = "en" # Default
         
         if not self.api_key:
             self.logger.warning(f"API Key environment variable {self.api_key_env} not found.")
+
+    def set_language(self, lang_code):
+        self.lang = lang_code
+        self.logger.info(f"API STT Language set to: {self.lang}")
 
     async def transcribe(self, audio_chunk: bytes, sample_rate: int) -> str:
         """
@@ -72,8 +77,9 @@ class APISTTEngine(STTEngine):
             # Multipart form data
             data = aiohttp.FormData()
             data.add_field('file', wav_buffer, filename='audio.wav', content_type='audio/wav')
-            data.add_field('model', "whisper-1") # Currently standard model name
-            data.add_field('language', 'en') # Or auto
+            data.add_field('model', self.model)
+            if self.lang and self.lang != "auto":
+                data.add_field('language', self.lang)
             
             async with aiohttp.ClientSession() as session:
                 try:

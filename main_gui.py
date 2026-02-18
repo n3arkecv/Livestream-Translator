@@ -75,11 +75,9 @@ class BackendWorker(QThread):
         if self.loop:
             self.loop.call_soon_threadsafe(lambda: self.translation_manager.reset_context())
     
-    def set_model(self, model_name):
+    def set_model(self, model_id):
         if self.loop:
-            # Model loading is heavy, maybe offload to executor? 
-            # For now, running it in loop might freeze audio processing for a few seconds, which is acceptable during config change.
-            self.loop.call_soon_threadsafe(lambda: self.stt_manager.set_model(model_name))
+            self.loop.call_soon_threadsafe(lambda: self._update_model_async(model_id))
 
     def set_audio_device(self, device_index):
         if self.loop:
@@ -112,6 +110,40 @@ class BackendWorker(QThread):
         # Reload the STT engine with new compute type
         if self.stt_manager:
             self.stt_manager.reload_engine()
+
+    def _update_model_async(self, model_id):
+        self.logger.info(f"Updating STT model to: {model_id}")
+        
+        if "stt" not in self.config:
+            self.config["stt"] = {}
+            
+        mode = "local"
+        actual_model = model_id
+        
+        if model_id.startswith("api:"):
+            mode = "api"
+            parts = model_id.split(":")
+            if len(parts) >= 3:
+                # format: api:provider:model
+                provider = parts[1]
+                actual_model = parts[2]
+                if "api" not in self.config["stt"]:
+                    self.config["stt"]["api"] = {}
+                self.config["stt"]["api"]["provider"] = provider
+                self.config["stt"]["api"]["model"] = actual_model
+        
+        old_mode = self.config["stt"].get("mode", "local")
+        self.config["stt"]["mode"] = mode
+        self.config["stt"]["model"] = actual_model
+        
+        if self.stt_manager:
+            self.stt_manager.mode = mode
+            if mode != old_mode:
+                self.logger.info(f"STT Mode changed from {old_mode} to {mode}. Reloading engine...")
+                self.stt_manager.reload_engine()
+            else:
+                # Just reload model if same mode
+                self.stt_manager.set_model(actual_model)
 
     def _update_audio_device_async(self, device_index):
         self.logger.info(f"Updating audio device to index: {device_index}")
@@ -195,6 +227,39 @@ def main():
                         config["use_original_text_for_context"] = (value.lower() == "true")
                     elif key == "TARGET_TRANSLATION_LANGUAGE":
                         config["target_translation_language"] = value
+                    elif key == "STT_MODEL":
+                        config["stt"]["model"] = value
+                        if value.startswith("api:"):
+                            config["stt"]["mode"] = "api"
+                            parts = value.split(":")
+                            if len(parts) >= 3:
+                                if "api" not in config["stt"]:
+                                    config["stt"]["api"] = {}
+                                config["stt"]["api"]["provider"] = parts[1]
+                                config["stt"]["api"]["model"] = parts[2]
+                        else:
+                            config["stt"]["mode"] = "local"
+                    elif key == "STT_DEVICE":
+                        config["stt"]["device"] = value
+                    elif key == "STT_COMPUTE_TYPE":
+                        config["stt"]["compute_type"] = value
+                    elif key == "STT_LANGUAGE":
+                        config["stt_language"] = value
+                    elif key == "AUDIO_DEVICE_INDEX":
+                        try:
+                            config["audio"]["device_index"] = int(value)
+                        except ValueError:
+                            pass
+                    elif key == "OVERLAY_FONT_SIZE":
+                        try:
+                            config["overlay_font_size"] = int(value)
+                        except ValueError:
+                            pass
+                    elif key == "OVERLAY_HISTORY_LINES":
+                        try:
+                            config["overlay_history_lines"] = int(value)
+                        except ValueError:
+                            pass
 
     # 3. Backend Worker
     worker = BackendWorker(bus, config, logger)

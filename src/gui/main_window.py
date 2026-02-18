@@ -1,3 +1,4 @@
+import os
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit, QLabel, QGroupBox, QComboBox, QSpinBox, QStyle
 from PySide6.QtCore import Signal, Slot, QSize
 from PySide6.QtGui import QIcon, QFont
@@ -42,6 +43,9 @@ class MainWindow(QMainWindow):
         # Format: (Display Name, Model ID)
         # If Model ID is None, it's a category header
         model_structure = [
+            ("--- API Models ---", None),
+            ("OpenAI Whisper (API)", "api:openai:whisper-1"),
+            
             ("--- Turbo Model ---", None),
             ("Turbo v3 (High Accuracy)", "deepdml/faster-whisper-large-v3-turbo-ct2"),
             
@@ -261,50 +265,129 @@ class MainWindow(QMainWindow):
         self.bridge.sig_translation.connect(self.overlay.update_translation)
         self.bridge.sig_context.connect(self.overlay.update_context)
 
-        # Load initial overlay settings
-        self.load_overlay_settings()
+        # Load initial settings
+        self.load_all_settings(config_path="User_config.txt")
 
         # Initial population of audio devices
         self.refresh_audio_devices()
 
         # Initialize device and compute type from config (will be set by main_gui)
-        # Default to CUDA and float16
-        self.combo_device.setCurrentIndex(0)  # CUDA by default
-        self.combo_compute_type.setCurrentIndex(0)  # float16 by default
+        # These are now handled in load_all_settings
 
-    def load_overlay_settings(self):
-        import os
+    def save_setting(self, key, value):
         config_path = "User_config.txt"
+        new_lines = []
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+            else:
+                lines = []
+            
+            found = False
+            for line in lines:
+                stripped = line.strip()
+                if not stripped.startswith('#') and '=' in stripped:
+                    k, _ = stripped.split('=', 1)
+                    if k.strip() == key:
+                        new_lines.append(f"{key}={value}\n")
+                        found = True
+                        continue
+                new_lines.append(line)
+            
+            if not found:
+                if new_lines and not new_lines[-1].endswith('\n'):
+                     new_lines[-1] += '\n'
+                new_lines.append(f"{key}={value}\n")
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                f.writelines(new_lines)
+        except Exception as e:
+            self.append_log("ERROR", f"Failed to save setting {key}: {e}")
+
+    def load_all_settings(self, config_path="User_config.txt"):
         opacity = 40 # Default
-        target_lang = None
-        gui_lang = "en"
+        target_lang = "Traditional Chinese"
+        gui_lang = "zh-TW"
+        stt_lang = "auto"
+        model = "deepdml/faster-whisper-large-v3-turbo-ct2"
+        device = "cuda"
+        compute_type = "float16"
+        audio_idx = None
+        font_size = 24
+        hist_lines = 3
         
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     for line in f:
-                        if line.startswith("OVERLAY_OPACITY="):
-                            try:
-                                opacity = int(line.split("=")[1].strip())
-                            except ValueError:
-                                pass
-                        elif line.startswith("TARGET_TRANSLATION_LANGUAGE="):
-                             target_lang = line.split("=")[1].strip()
-                        elif line.startswith("GUI_LANGUAGE="):
-                             gui_lang = line.split("=")[1].strip()
+                        line = line.strip()
+                        if not line or line.startswith('#') or '=' not in line:
+                            continue
+                        key, val = line.split('=', 1)
+                        key, val = key.strip(), val.strip()
+                        
+                        if key == "OVERLAY_OPACITY":
+                            try: opacity = int(val)
+                            except: pass
+                        elif key == "TARGET_TRANSLATION_LANGUAGE":
+                            target_lang = val
+                        elif key == "GUI_LANGUAGE":
+                            gui_lang = val
+                        elif key == "STT_LANGUAGE":
+                            stt_lang = val
+                        elif key == "STT_MODEL":
+                            model = val
+                        elif key == "STT_DEVICE":
+                            device = val
+                        elif key == "STT_COMPUTE_TYPE":
+                            compute_type = val
+                        elif key == "AUDIO_DEVICE_INDEX":
+                            try: audio_idx = int(val)
+                            except: audio_idx = None
+                        elif key == "OVERLAY_FONT_SIZE":
+                            try: font_size = int(val)
+                            except: pass
+                        elif key == "OVERLAY_HISTORY_LINES":
+                            try: hist_lines = int(val)
+                            except: pass
             except Exception:
                 pass
         
+        # Apply to UI
         self.overlay.set_background_opacity(opacity)
-        
-        # Set GUI language
         i18n.set_language(gui_lang)
         self.update_ui_text()
         
-        if target_lang:
-             self.sig_update_translation_language.emit(target_lang)
-             self.combo_trans_lang.setCurrentText(target_lang)
-             self.append_log("INFO", f"Translation Language set to: {target_lang}")
+        # Restore ComboBoxes
+        index = self.combo_lang.findData(stt_lang)
+        if index >= 0: self.combo_lang.setCurrentIndex(index)
+        
+        self.combo_trans_lang.setCurrentText(target_lang)
+        
+        index = self.combo_model.findData(model)
+        if index >= 0: self.combo_model.setCurrentIndex(index)
+        
+        index = self.combo_device.findData(device)
+        if index >= 0: self.combo_device.setCurrentIndex(index)
+        
+        index = self.combo_compute_type.findData(compute_type)
+        if index >= 0: self.combo_compute_type.setCurrentIndex(index)
+
+        index = self.combo_size.findData(font_size)
+        if index >= 0: self.combo_size.setCurrentIndex(index)
+        
+        self.spin_hist.setValue(hist_lines)
+
+        # Handle Audio Device after initial refresh which happens in caller
+        self._pending_audio_idx = audio_idx
+        
+        # Emit initial signals (some might be needed by backend)
+        self.sig_update_language.emit(stt_lang)
+        self.sig_update_translation_language.emit(target_lang)
+        self.sig_update_model.emit(model)
+        self.sig_update_device.emit(device)
+        self.sig_update_compute_type.emit(compute_type)
 
     def refresh_audio_devices(self):
         self.combo_audio.blockSignals(True)
@@ -324,26 +407,37 @@ class MainWindow(QMainWindow):
             self.append_log("ERROR", f"Failed to list audio devices: {e}")
             
         self.combo_audio.blockSignals(False)
+        
+        # Restore selected device if pending
+        if hasattr(self, '_pending_audio_idx') and self._pending_audio_idx is not None:
+            index = self.combo_audio.findData(self._pending_audio_idx)
+            if index >= 0:
+                self.combo_audio.setCurrentIndex(index)
+            self._pending_audio_idx = None
 
     def on_audio_device_changed(self, index):
         device_index = self.combo_audio.currentData()
         device_name = self.combo_audio.currentText()
         self.append_log("INFO", f"Selected Audio Device: {device_name}")
         self.sig_update_audio_device.emit(device_index)
+        self.save_setting("AUDIO_DEVICE_INDEX", device_index if device_index is not None else "")
 
     def on_language_changed(self, index):
         lang_code = self.combo_lang.currentData()
         self.append_log("INFO", f"STT Language changed to: {lang_code}")
         self.sig_update_language.emit(lang_code)
+        self.save_setting("STT_LANGUAGE", lang_code)
 
     def on_translation_language_changed(self, text):
         self.append_log("INFO", f"Target Translation Language changed to: {text}")
         self.sig_update_translation_language.emit(text)
+        self.save_setting("TARGET_TRANSLATION_LANGUAGE", text)
 
     def on_model_changed(self, index):
         model_name = self.combo_model.currentData()
         self.append_log("INFO", f"Switching model to: {model_name} (may take a few seconds)")
         self.sig_update_model.emit(model_name)
+        self.save_setting("STT_MODEL", model_name)
 
     def on_device_changed(self, index):
         device = self.combo_device.currentData()
@@ -361,19 +455,23 @@ class MainWindow(QMainWindow):
             self.combo_compute_type.setEnabled(True)
             
         self.sig_update_device.emit(device)
+        self.save_setting("STT_DEVICE", device)
 
     def on_compute_type_changed(self, index):
         compute_type = self.combo_compute_type.currentData()
         self.append_log("INFO", f"Switching compute type to: {compute_type}")
         self.sig_update_compute_type.emit(compute_type)
+        self.save_setting("STT_COMPUTE_TYPE", compute_type)
 
     def on_font_size_changed(self, index):
         size = self.combo_size.currentData()
         if size:
             self.overlay.set_font_size(size)
+            self.save_setting("OVERLAY_FONT_SIZE", size)
 
     def on_history_lines_changed(self, value):
         self.overlay.set_history_lines(value)
+        self.save_setting("OVERLAY_HISTORY_LINES", value)
 
     def on_start_stop_clicked(self, checked):
         if checked:
@@ -399,7 +497,7 @@ class MainWindow(QMainWindow):
         settings = SettingsWindow(parent=self)
         if settings.exec():
             self.append_log("INFO", "Settings saved. Restart application for full effect.")
-            self.load_overlay_settings()
+            self.load_all_settings()
             # Reload GUI texts might be needed, but restart is suggested in log
             self.update_ui_text()
 
