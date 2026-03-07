@@ -52,6 +52,17 @@ if /i "%SKIP_CHECK%"=="True" (
         pip install -r requirements.txt
         if %errorlevel% neq 0 goto :piperror
     )
+
+    :: Check and copy manual components
+    if not exist Lib\ (
+        echo [INFO] Creating Lib folder for manual components ^(like cublas64_12.dll^)...
+        mkdir Lib
+    )
+    echo [INFO] Checking for manual components in Lib folder...
+    if exist Lib\*.dll (
+        echo [INFO] Copying DLLs from Lib to virtual environment...
+        copy /Y Lib\*.dll %VENV_DIR%\Scripts\ >nul
+    )
 )
 
 :: 5. Launch
