@@ -9,7 +9,7 @@ from src.utils.logger import SystemLogger
 from src.audio.chunk_processor import ChunkProcessor
 
 class AudioFormatConverter:
-    """Converts audio to mono, 44100Hz, float32."""
+    """Converts audio to mono, 16000Hz, float32."""
     
     def convert(self, raw_bytes: bytes, source_rate: int, source_channels: int) -> np.ndarray:
         # 1. Bytes -> Int16 numpy array
@@ -34,8 +34,8 @@ class AudioFormatConverter:
         #    audio_float32 = audio_float32 * (0.1 / rms) # Normalize to target RMS
         
         # 4. Resample if needed (Linear interpolation for simplicity)
-        if source_rate != 44100:
-            audio_float32 = self._resample(audio_float32, source_rate, 44100)
+        if source_rate != 16000:
+            audio_float32 = self._resample(audio_float32, source_rate, 16000)
             
         return audio_float32
 
@@ -65,7 +65,7 @@ class AudioCapture:
         self.chunk_ms = config.get("chunk", {}).get("size_ms", 640)
         self.overlap_ms = config.get("chunk", {}).get("overlap_ms", 160)
         
-        self.chunk_processor = ChunkProcessor(bus, 44100, self.chunk_ms, self.overlap_ms)
+        self.chunk_processor = ChunkProcessor(bus, 16000, self.chunk_ms, self.overlap_ms)
         self.format_converter = AudioFormatConverter()
         
         self.pyaudio_instance: Optional[pyaudio.PyAudio] = None

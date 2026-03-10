@@ -63,16 +63,16 @@ class LocalSTTEngine(STTEngine):
         It also handles resampling internally if needed, but typically expects 16kHz.
         However, passing 'sample_rate' argument to transcribe() is not standard in WhisperModel.transcribe().
         WhisperModel.transcribe() usually expects audio at 16k. 
-        If our input is 44.1k, we SHOULD resample it to 16k before passing to model, 
+        If our input is not 16k, we SHOULD resample it to 16k before passing to model, 
         OR rely on faster-whisper's internal resampling if it supports it (it accepts ndarray).
         
         Actually, faster-whisper/CTranslate2 expects 16kHz audio. 
-        We should resample if input is 44100.
+        We process at 16000Hz from the start to avoid this.
         """
         if not self.model:
             return ""
 
-        # Resample if needed (Naive check, ideally we assume input is standard 44100 from capture)
+        # Resample if needed (Now we assume input is optimally 16000 from capture)
         # FasterWhisper expects 16000 Hz
         if sample_rate != 16000:
             audio_chunk = self._resample(audio_chunk, sample_rate, 16000)

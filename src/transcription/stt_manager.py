@@ -20,7 +20,8 @@ class STTManager:
         
         # Buffer for "Streaming" style accumulation
         import numpy as np
-        self.audio_buffer = np.array([], dtype=np.float32)
+        self.audio_buffer_list = []
+        self.audio_buffer_length = 0
         self.silence_counter = 0
         self.chunks_since_transcribe = 0
         self.VAD_THRESHOLD = 0.005 # Adjust based on noise floor
@@ -163,11 +164,12 @@ class STTManager:
                 self.silence_counter = 0
                 
             # 2. Append to Buffer
-            self.audio_buffer = np.concatenate((self.audio_buffer, chunk))
+            self.audio_buffer_list.append(chunk)
+            self.audio_buffer_length += len(chunk)
             self.chunks_since_transcribe += 1
             
             # 3. Check buffer limits
-            buffer_duration_sec = len(self.audio_buffer) / 44100
+            buffer_duration_sec = self.audio_buffer_length / 16000
             
             should_finalize = False
             if self.silence_counter >= self.SILENCE_CHUNKS_THRESHOLD and buffer_duration_sec > 0.3:
@@ -188,14 +190,18 @@ class STTManager:
                 
             if should_finalize or self.chunks_since_transcribe >= throttle_interval:
                 self.bus.emit("stt.decode_started", {})
-                text = await self.engine.transcribe(self.audio_buffer, 44100)
+                
+                # Combine buffer only when needed
+                combined_buffer = np.concatenate(self.audio_buffer_list) if self.audio_buffer_list else np.array([], dtype=np.float32)
+                text = await self.engine.transcribe(combined_buffer, 16000)
                 self.chunks_since_transcribe = 0 # Reset throttle counter
                 
                 if text:
                     if should_finalize:
                         # Finalize
                         self.bus.emit("stt.final_sentence", {"sentence": text})
-                        self.audio_buffer = np.array([], dtype=np.float32)
+                        self.audio_buffer_list = []
+                        self.audio_buffer_length = 0
                         self.silence_counter = 0
                     else:
                         # Partial
@@ -204,7 +210,8 @@ class STTManager:
                     # No text found
                     if should_finalize:
                         # Just clear buffer if we thought we were finishing but got nothing (noise)
-                        self.audio_buffer = np.array([], dtype=np.float32)
+                        self.audio_buffer_list = []
+                        self.audio_buffer_length = 0
                         self.silence_counter = 0
             else:
                 # Skip transcription for this chunk, just accumulate
@@ -213,4 +220,5 @@ class STTManager:
         except Exception as e:
             self.logger.error("STT processing failed", exc=e)
             # Reset buffer on error to avoid stuck state
-            self.audio_buffer = np.array([], dtype=np.float32)
+            self.audio_buffer_list = []
+            self.audio_buffer_length = 0
